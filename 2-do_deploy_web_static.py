@@ -1,50 +1,52 @@
-from fabric.api import env, put, run, local
-from os.path import exists
+#!/usr/bin/python3
+"""
+Fabric script that distribues an archive to your web servers
+"""
 
-# Define the list of web servers
-env.hosts = ['54.221.36.172', '18.234.218.113']  # Replace with your actual server IPs
-env.user = 'ubuntu'  # Replace with your SSH username
-env.key_filename = '~/.ssh/id_rsa'  # Replace with your SSH private key path
+from datetime import datetime
+from fabric.api import *
+import os
+
+env.host = ['54.221.36.172', '18.234.218.113']
+env.user = "ubuntu"
+
+
+def do_pack():
+    """
+        return the archive path if archive has generated correctly.
+    """
+
+    local("mkdir -p versions")
+    date = datetime.now().strftime("%Y%m%d%H%M%S")
+    archived_f_path = "versions/web_static_{}.tgz".format(date)
+    t_gzip_archive = local("tar -cvzf {} web_static".format(archived_f_path))
+
+    if t_gzip_archive.succeeded:
+        return archived_f_path
+    else:
+        return None
+
 
 def do_deploy(archive_path):
     """
-    Distributes an archive to web servers and deploys it.
+        Distribute archive.
     """
-    if not exists(archive_path):
-        return False
-
-    try:
-        # Upload the archive to the /tmp/ directory on the server
-        archive_filename = archive_path.split('/')[-1]  # Get the filename (e.g., web_static_20231010.tgz)
-        archive_no_ext = archive_filename.split('.')[0]  # Remove the extension (e.g., web_static_20231010)
-
-        # Upload the archive to /tmp/
-        put(archive_path, "/tmp/{}".format(archive_filename))
-
-        # Create the target directory
-        run("mkdir -p /data/web_static/releases/{}/".format(archive_no_ext))
-
-        # Uncompress the archive to the target directory
-        run("tar -xzf /tmp/{} -C /data/web_static/releases/{}/".format(archive_filename, archive_no_ext))
-
-        # Remove the uploaded archive from /tmp/
-        run("rm /tmp/{}".format(archive_filename))
-
-        # Move contents to the proper location
-        run("mv /data/web_static/releases/{}/web_static/* /data/web_static/releases/{}/".format(archive_no_ext, archive_no_ext))
-
-        # Remove the now-empty web_static directory
-        run("rm -rf /data/web_static/releases/{}/web_static".format(archive_no_ext))
-
-        # Delete the old symbolic link
-        run("rm -rf /data/web_static/current")
-
-        # Create a new symbolic link
-        run("ln -s /data/web_static/releases/{}/ /data/web_static/current".format(archive_no_ext))
+    if os.path.exists(archive_path):
+        archived_file = archive_path[9:]
+        newest_version = "/data/web_static/releases/" + archived_file[:-4]
+        archived_file = "/tmp/" + archived_file
+        put(archive_path, "/tmp/")
+        run("sudo mkdir -p {}".format(newest_version))
+        run("sudo tar -xzf {} -C {}/".format(archived_file,
+                                             newest_version))
+        run("sudo rm {}".format(archived_file))
+        run("sudo mv {}/web_static/* {}".format(newest_version,
+                                                newest_version))
+        run("sudo rm -rf {}/web_static".format(newest_version))
+        run("sudo rm -rf /data/web_static/current")
+        run("sudo ln -s {} /data/web_static/current".format(newest_version))
 
         print("New version deployed!")
         return True
 
-    except Exception as e:
-        print("Deployment failed: {}".format(e))
-        return False
+    return False
