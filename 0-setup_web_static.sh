@@ -1,27 +1,34 @@
 #!/usr/bin/env bash
-# script that sets up web servers for the deployment of web_static
+# Script that sets up web servers for the deployment of web_static
+
+# Install Nginx if not already installed
 sudo apt-get update
 sudo apt-get -y install nginx
 sudo ufw allow 'Nginx HTTP'
 
-sudo mkdir -p /data/
-sudo mkdir -p /data/web_static/
-sudo mkdir -p /data/web_static/releases/
-sudo mkdir -p /data/web_static/shared/
-sudo mkdir -p /data/web_static/releases/test/
-sudo touch /data/web_static/releases/test/index.html
-sudo echo "<html>
+# Create required directories
+sudo mkdir -p /data/web_static/releases/test /data/web_static/shared
+
+# Create a fake HTML file
+echo "<html>
   <head>
   </head>
   <body>
     Holberton School
   </body>
-</html>" | sudo tee /data/web_static/releases/test/index.html
+</html>" | sudo tee /data/web_static/releases/test/index.html > /dev/null
 
-sudo ln -s -f /data/web_static/releases/test/ /data/web_static/current
+# Create symbolic link (force if exists)
+sudo ln -sf /data/web_static/releases/test/ /data/web_static/current
 
+# Give ownership to ubuntu user and group
 sudo chown -R ubuntu:ubuntu /data/
 
-sudo sed -i '/listen 80 default_server/a location /hbnb_static { alias /data/web_static/current/;}' /etc/nginx/sites-enabled/default
+# Update Nginx configuration if not already configured
+CONFIG_FILE="/etc/nginx/sites-available/default"
+if ! grep -q "location /hbnb_static" "$CONFIG_FILE"; then
+  sudo sed -i '/server_name _;/a\\n    location /hbnb_static/ {\n        alias /data/web_static/current/;\n        index index.html;\n    }\n' "$CONFIG_FILE"
+fi
 
-sudo service nginx restart
+# Restart Nginx
+sudo systemctl restart nginx
